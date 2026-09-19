@@ -1,7 +1,7 @@
 import sdk, { Settings, ScryptedDeviceBase, Setting, SettingValue, DeviceDiscovery, AdoptDevice, DiscoveredDevice, Device, ScryptedInterface, ScryptedDeviceType, DeviceProvider, Reboot, DeviceCreatorSettings } from "@scrypted/sdk";
 import ReolinkProvider from "../main";
 import { StorageSettings } from "@scrypted/sdk/storage-settings";
-import { DevInfo } from "../probe";
+import { DevInfo, ReolinkScheme } from "../probe";
 import { ReolinkNvrCamera } from "./camera";
 import { DeviceInputData, ReolinkNvrClient } from "./api";
 
@@ -27,6 +27,13 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
         password: {
             title: 'Password',
             type: 'password',
+            onPut: async () => await this.reinit()
+        },
+        useHttps: {
+            title: 'Use HTTPS',
+            description: 'Connect to the NVR API over HTTPS. Required when the NVR has HTTPS enabled, which makes plain HTTP API requests redirect to the web UI. Set the HTTP port to 443 as well.',
+            type: 'boolean',
+            defaultValue: false,
             onPut: async () => await this.reinit()
         },
         httpPort: {
@@ -244,7 +251,7 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
 
     getClient() {
         if (!this.client) {
-            const { ipAddress, httpPort, password, username } = this.storageSettings.values;
+            const { ipAddress, httpPort, password, username, useHttps } = this.storageSettings.values;
             const address = `${ipAddress}:${httpPort}`;
             this.client = new ReolinkNvrClient(
                 address, 
@@ -252,6 +259,7 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
                 password, 
                 this.console,
                 this,
+                useHttps ? 'https' : 'http',
             );
         }
         return this.client;
@@ -265,7 +273,7 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
         info.version = devInfo.firmVer;
         info.model = devInfo.model;
         info.manufacturer = 'Reolink';
-        info.managementUrl = `http://${info.ip}`;
+        info.managementUrl = `${this.storageSettings.values.useHttps ? 'https' : 'http'}://${info.ip}`;
         this.info = info;
     }
 

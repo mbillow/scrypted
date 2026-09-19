@@ -4,7 +4,7 @@ import { HttpFetchOptions } from '../../../server/src/fetch/http-fetch';
 
 import { sleep } from "@scrypted/common/src/sleep";
 import { PanTiltZoomCommand } from "@scrypted/sdk";
-import { DevInfo, getLoginParameters } from './probe';
+import { DevInfo, getLoginParameters, ReolinkScheme } from './probe';
 
 export interface Enc {
     audio: number;
@@ -97,7 +97,7 @@ export class ReolinkCameraClient {
     parameters: Record<string, string>;
     tokenLease: number;
 
-    constructor(public host: string, public username: string, public password: string, public channelId: number, public console: Console, public readonly forceToken?: boolean) {
+    constructor(public host: string, public username: string, public password: string, public channelId: number, public console: Console, public readonly forceToken?: boolean, public readonly scheme: ReolinkScheme = 'http') {
         this.credential = {
             username,
             password,
@@ -135,7 +135,7 @@ export class ReolinkCameraClient {
             this.console.log('performing initial login...');
         }
 
-        const { parameters, leaseTimeSeconds } = await getLoginParameters(this.host, this.username, this.password, this.forceToken);
+        const { parameters, leaseTimeSeconds } = await getLoginParameters(this.host, this.username, this.password, this.forceToken, this.scheme);
         this.parameters = parameters;
         this.tokenLease = Date.now() + 1000 * leaseTimeSeconds;
     }
@@ -145,7 +145,7 @@ export class ReolinkCameraClient {
             return;
         }
         try {
-            const url = new URL(`http://${this.host}/api.cgi`);
+            const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
             const params = url.searchParams;
             params.set('cmd', 'Logout');
             params.set('token', this.parameters.token);
@@ -176,7 +176,7 @@ export class ReolinkCameraClient {
     }
 
     async reboot() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'Reboot');
         const response = await this.requestWithLogin({
@@ -199,7 +199,7 @@ export class ReolinkCameraClient {
     //     }
     //  ]
     async getMotionState() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'GetMdState');
         params.set('channel', this.channelId.toString());
@@ -214,7 +214,7 @@ export class ReolinkCameraClient {
     }
 
     async getOsd(): Promise<Osd> {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [
             {
@@ -239,7 +239,7 @@ export class ReolinkCameraClient {
     }
 
     async setOsd(osd: Osd) {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [
             {
@@ -267,7 +267,7 @@ export class ReolinkCameraClient {
     }
 
     async getAiState() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'GetAiState');
         params.set('channel', this.channelId.toString());
@@ -282,7 +282,7 @@ export class ReolinkCameraClient {
     }
 
     async getAbility() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'GetAbility');
         params.set('channel', this.channelId.toString());
@@ -324,7 +324,7 @@ export class ReolinkCameraClient {
     }
 
     async jpegSnapshot(timeout = 10000) {
-        const url = new URL(`http://${this.host}/cgi-bin/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/cgi-bin/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'Snap');
         params.set('channel', this.channelId.toString());
@@ -339,7 +339,7 @@ export class ReolinkCameraClient {
     }
 
     async getEncoderConfiguration(): Promise<Enc> {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'GetEnc');
         // is channel used on this call?
@@ -353,7 +353,7 @@ export class ReolinkCameraClient {
     }
 
     async getDeviceInfo(): Promise<DevInfo> {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'GetDevInfo');
         const response = await this.requestWithLogin({
@@ -408,7 +408,7 @@ export class ReolinkCameraClient {
     }
 
     async getPtzPresets(): Promise<PtzPreset[]> {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'GetPtzPreset');
         const body = [
@@ -429,7 +429,7 @@ export class ReolinkCameraClient {
     }
 
     private async ptzOp(op: string, speed: number, id?: number) {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'PtzCtrl');
 
@@ -470,7 +470,7 @@ export class ReolinkCameraClient {
     }
 
     private async presetOp(speed: number, id: number) {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'PtzCtrl');
 
@@ -526,7 +526,7 @@ export class ReolinkCameraClient {
     }
 
     async getSiren() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [{
             cmd: 'GetAudioAlarmV20',
@@ -551,7 +551,7 @@ export class ReolinkCameraClient {
     }
 
     async setSiren(on: boolean, duration?: number) {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
         const params = url.searchParams;
         params.set('cmd', 'AudioAlarmPlay');
 
@@ -590,7 +590,7 @@ export class ReolinkCameraClient {
     }
 
     async getWhiteLedState() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [{
             cmd: 'GetWhiteLed',
@@ -615,7 +615,7 @@ export class ReolinkCameraClient {
     }
 
     async setWhiteLedState(on?: boolean, brightness?: number) {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const settings: any = { channel: this.channelId };
 
@@ -645,7 +645,7 @@ export class ReolinkCameraClient {
     }
 
     async getBatteryInfo() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [
             {
@@ -680,7 +680,7 @@ export class ReolinkCameraClient {
     }
 
     async getEvents() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [
             {
@@ -708,7 +708,7 @@ export class ReolinkCameraClient {
     }
 
     async getPirState() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [{
             cmd: 'GetPirInfo',
@@ -734,7 +734,7 @@ export class ReolinkCameraClient {
     }
 
     async setPirState(on: boolean) {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const currentPir = await this.getPirState();
         const newState = on ? 1 : 0;
@@ -768,7 +768,7 @@ export class ReolinkCameraClient {
     }
 
     async getLocalLink() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [
             {
@@ -816,7 +816,7 @@ export class ReolinkCameraClient {
     }
 
     async getNetData() {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [{
             cmd: 'GetNetPort',
@@ -841,7 +841,7 @@ export class ReolinkCameraClient {
     }
 
     async setNetData(netData: NetData) {
-        const url = new URL(`http://${this.host}/api.cgi`);
+        const url = new URL(`${this.scheme}://${this.host}/api.cgi`);
 
         const body = [{
             cmd: 'SetNetPort',

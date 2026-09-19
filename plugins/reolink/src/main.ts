@@ -6,7 +6,7 @@ import { createRtspMediaStreamOptions, Destroyable, RtspProvider, RtspSmartCamer
 import { OnvifCameraAPI, OnvifEvent, connectCameraAPI } from './onvif-api';
 import { listenEvents } from './onvif-events';
 import { OnvifIntercom } from './onvif-intercom';
-import { DevInfo } from './probe';
+import { DevInfo, ReolinkScheme } from './probe';
 import { AIState, Enc, isDeviceHomeHub, isDeviceNvr, ReolinkCameraClient } from './reolink-api';
 import { ReolinkNvrDevice } from './nvr/nvr';
 import { ReolinkNvrClient } from './nvr/api';
@@ -117,6 +117,13 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
             title: 'Doorbell',
             description: 'This camera is a Reolink Doorbell.',
             type: 'boolean',
+        },
+        useHttps: {
+            subgroup: 'Advanced',
+            title: 'Use HTTPS',
+            description: 'Connect to the camera API over HTTPS. Required when the device has HTTPS enabled, which makes plain HTTP API requests redirect to the web UI. Remember to set the HTTP Port to 443.',
+            type: 'boolean',
+            defaultValue: false,
         },
         rtmpPort: {
             subgroup: 'Advanced',
@@ -564,19 +571,23 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
         info.version = this.storageSettings.values.deviceInfo?.hardVer;
         info.model = this.storageSettings.values.deviceInfo?.model;
         info.manufacturer = 'Reolink';
-        info.managementUrl = `http://${ip}`;
+        info.managementUrl = `${this.getScheme()}://${ip}`;
         this.info = info;
+    }
+
+    getScheme(): ReolinkScheme {
+        return this.storageSettings.values.useHttps ? 'https' : 'http';
     }
 
     getClient() {
         if (!this.client)
-            this.client = new ReolinkCameraClient(this.getHttpAddress(), this.getUsername(), this.getPassword(), this.getRtspChannel(), this.console);
+            this.client = new ReolinkCameraClient(this.getHttpAddress(), this.getUsername(), this.getPassword(), this.getRtspChannel(), this.console, undefined, this.getScheme());
         return this.client;
     }
 
     getClientWithToken() {
         if (!this.clientWithToken)
-            this.clientWithToken = new ReolinkCameraClient(this.getHttpAddress(), this.getUsername(), this.getPassword(), this.getRtspChannel(), this.console, true);
+            this.clientWithToken = new ReolinkCameraClient(this.getHttpAddress(), this.getUsername(), this.getPassword(), this.getRtspChannel(), this.console, true, this.getScheme());
         return this.clientWithToken;
     }
 
@@ -1195,9 +1206,10 @@ class ReolinkProvider extends RtspProvider {
         let ai;
         let abilities;
         const rtspChannel = parseInt(settings.rtspChannel?.toString()) || 0;
+        const scheme: ReolinkScheme = settings.useHttps?.toString() === 'true' ? 'https' : 'http';
         if (!skipValidate) {
-            const api = new ReolinkCameraClient(httpAddress, username, password, rtspChannel, this.console);
-            const apiWithToken = new ReolinkCameraClient(httpAddress, username, password, rtspChannel, this.console, true);
+            const api = new ReolinkCameraClient(httpAddress, username, password, rtspChannel, this.console, undefined, scheme);
+            const apiWithToken = new ReolinkCameraClient(httpAddress, username, password, rtspChannel, this.console, true, scheme);
             try {
                 await api.jpegSnapshot();
             }
@@ -1236,6 +1248,7 @@ class ReolinkProvider extends RtspProvider {
         device.setIPAddress(settings.ip?.toString());
         device.putSetting('rtspChannel', settings.rtspChannel?.toString());
         device.setHttpPortOverride(settings.httpPort?.toString());
+        device.storageSettings.values.useHttps = scheme === 'https';
         device.updateDeviceInfo();
 
         return nativeId;
@@ -1280,6 +1293,13 @@ class ReolinkProvider extends RtspProvider {
             },
             {
                 subgroup: 'Advanced',
+                key: 'useHttps',
+                title: 'Use HTTPS',
+                description: 'Connect to the device API over HTTPS. Required when the device has HTTPS enabled. Set the HTTP Port to 443 as well.',
+                type: 'boolean',
+            },
+            {
+                subgroup: 'Advanced',
                 key: 'skipValidate',
                 title: 'Skip Validation',
                 description: 'Add the device without verifying the credentials and network settings.',
@@ -1300,7 +1320,8 @@ class ReolinkProvider extends RtspProvider {
         const rtspPort = settings.rtspPort;
         const httpAddress = `${ip}:${httpPort || 80}`;
 
-        const client = new ReolinkNvrClient(httpAddress, username, password, this.console);
+        const nvrScheme: ReolinkScheme = settings.useHttps?.toString() === 'true' ? 'https' : 'http';
+        const client = new ReolinkNvrClient(httpAddress, username, password, this.console, undefined, nvrScheme);
         const { devInfo } = await client.getHubInfo();
 
         if (!devInfo) {
@@ -1329,6 +1350,7 @@ class ReolinkProvider extends RtspProvider {
         nvrDevice.storageSettings.values.password = password;
         nvrDevice.storageSettings.values.httpPort = httpPort;
         nvrDevice.storageSettings.values.rtspPort = rtspPort;
+        nvrDevice.storageSettings.values.useHttps = nvrScheme === 'https';
 
         nvrDevice.updateDeviceInfo(devInfo);
 
