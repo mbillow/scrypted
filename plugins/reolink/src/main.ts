@@ -121,7 +121,7 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
         useHttps: {
             subgroup: 'Advanced',
             title: 'Use HTTPS',
-            description: 'Connect to the camera API over HTTPS. Required when the device has HTTPS enabled, which makes plain HTTP API requests redirect to the web UI. Remember to set the HTTP Port to 443.',
+            description: 'Connect to the camera API over HTTPS. Required when the device has HTTPS enabled, which makes plain HTTP API requests redirect to the web UI. The HTTP Port defaults to 443 when this is enabled.',
             type: 'boolean',
             defaultValue: false,
         },
@@ -577,6 +577,11 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
 
     getScheme(): ReolinkScheme {
         return this.storageSettings.values.useHttps ? 'https' : 'http';
+    }
+
+    getHttpAddress() {
+        const defaultPort = this.getScheme() === 'https' ? 443 : 80;
+        return `${this.getIPAddress()}:${this.storage.getItem('httpPort') || defaultPort}`;
     }
 
     getClient() {
@@ -1188,7 +1193,8 @@ class ReolinkProvider extends RtspProvider {
     }
 
     async createDevice(settings: DeviceCreatorSettings, nativeId?: string): Promise<string> {
-        const httpAddress = `${settings.ip}:${settings.httpPort || 80}`;
+        const scheme: ReolinkScheme = settings.useHttps?.toString() === 'true' ? 'https' : 'http';
+        const httpAddress = `${settings.ip}:${settings.httpPort || (scheme === 'https' ? 443 : 80)}`;
         let info: DeviceInformation = {};
 
         const isNvr = settings.isNvr?.toString() === 'true';
@@ -1206,7 +1212,6 @@ class ReolinkProvider extends RtspProvider {
         let ai;
         let abilities;
         const rtspChannel = parseInt(settings.rtspChannel?.toString()) || 0;
-        const scheme: ReolinkScheme = settings.useHttps?.toString() === 'true' ? 'https' : 'http';
         if (!skipValidate) {
             const api = new ReolinkCameraClient(httpAddress, username, password, rtspChannel, this.console, undefined, scheme);
             const apiWithToken = new ReolinkCameraClient(httpAddress, username, password, rtspChannel, this.console, true, scheme);
@@ -1288,14 +1293,14 @@ class ReolinkProvider extends RtspProvider {
                 subgroup: 'Advanced',
                 key: 'httpPort',
                 title: 'HTTP Port',
-                description: 'Optional: Override the HTTP Port from the default value of 80.',
+                description: 'Optional: Override the HTTP Port. Defaults to 80, or 443 when Use HTTPS is enabled.',
                 placeholder: '80',
             },
             {
                 subgroup: 'Advanced',
                 key: 'useHttps',
                 title: 'Use HTTPS',
-                description: 'Connect to the device API over HTTPS. Required when the device has HTTPS enabled. Set the HTTP Port to 443 as well.',
+                description: 'Connect to the device API over HTTPS. Required when the device has HTTPS enabled. The HTTP Port defaults to 443 when this is enabled.',
                 type: 'boolean',
             },
             {
@@ -1318,9 +1323,9 @@ class ReolinkProvider extends RtspProvider {
         const ip = settings.ip?.toString();
         const httpPort = settings.httpPort;
         const rtspPort = settings.rtspPort;
-        const httpAddress = `${ip}:${httpPort || 80}`;
-
         const nvrScheme: ReolinkScheme = settings.useHttps?.toString() === 'true' ? 'https' : 'http';
+        const httpAddress = `${ip}:${httpPort || (nvrScheme === 'https' ? 443 : 80)}`;
+
         const client = new ReolinkNvrClient(httpAddress, username, password, this.console, undefined, nvrScheme);
         const { devInfo } = await client.getHubInfo();
 

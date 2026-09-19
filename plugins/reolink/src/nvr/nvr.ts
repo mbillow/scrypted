@@ -31,7 +31,7 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
         },
         useHttps: {
             title: 'Use HTTPS',
-            description: 'Connect to the NVR API over HTTPS. Required when the NVR has HTTPS enabled, which makes plain HTTP API requests redirect to the web UI. Set the HTTP port to 443 as well.',
+            description: 'Connect to the NVR API over HTTPS. Required when the NVR has HTTPS enabled, which makes plain HTTP API requests redirect to the web UI. The HTTP Port defaults to 443 when this is enabled.',
             type: 'boolean',
             defaultValue: false,
             onPut: async () => await this.reinit()
@@ -252,7 +252,7 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
     getClient() {
         if (!this.client) {
             const { ipAddress, httpPort, password, username, useHttps } = this.storageSettings.values;
-            const address = `${ipAddress}:${httpPort}`;
+            const address = `${ipAddress}:${httpPort || (useHttps ? 443 : 80)}`;
             this.client = new ReolinkNvrClient(
                 address, 
                 username, 
