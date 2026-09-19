@@ -58,7 +58,7 @@ export class OnvifCameraAPI {
     credential: AuthFetchCredentialState;
     detections: Map<string, string>;
 
-    constructor(public cam: any, username: string, password: string, public console: Console, binaryStateEvent: string) {
+    constructor(public cam: any, username: string, password: string, public console: Console, binaryStateEvent: string, public sourceToken?: string) {
         this.binaryStateEvent = binaryStateEvent
         this.credential = {
             username,
@@ -91,11 +91,31 @@ export class OnvifCameraAPI {
         })
     }
 
+    // An NVR serves every channel from one ONVIF endpoint, tagging each event with a
+    // zero padded source token ('000'..'007'). Without this, a device bound to one
+    // channel reports motion from all of them. Tokens that are not channel numbers are
+    // left alone, since standalone cameras do not share this convention.
+    private matchesSourceToken(event: any) {
+        if (!this.sourceToken)
+            return true;
+        const simpleItem = event.message?.message?.source?.simpleItem;
+        if (!simpleItem)
+            return true;
+        const items = Array.isArray(simpleItem) ? simpleItem : [simpleItem];
+        const token = items.map(item => item?.$?.Value).find((value: string) => /^\d{1,3}$/.test(value));
+        if (token === undefined)
+            return true;
+        return parseInt(token, 10) === parseInt(this.sourceToken, 10);
+    }
+
     listenEvents() {
         const ret = new EventEmitter();
 
         this.cam.on('event', (event: any, xml: string) => {
             ret.emit('data', xml);
+
+            if (!this.matchesSourceToken(event))
+                return;
 
             if (!event.message.message.data?.simpleItem?.$)
                 return;
@@ -383,7 +403,7 @@ export class OnvifCameraAPI {
     }
 }
 
-export async function connectCameraAPI(ipAndPort: string, username: string, password: string, console: Console, binaryStateEvent: string) {
+export async function connectCameraAPI(ipAndPort: string, username: string, password: string, console: Console, binaryStateEvent: string, sourceToken?: string) {
     const split = ipAndPort.split(':');
     const [hostname, port] = split;
     const cam = await promisify(cb => {
@@ -394,5 +414,5 @@ export async function connectCameraAPI(ipAndPort: string, username: string, pass
             port,
         }, (err: Error) => cb(err, cam));
     });
-    return new OnvifCameraAPI(cam, username, password, console, binaryStateEvent);
+    return new OnvifCameraAPI(cam, username, password, console, binaryStateEvent, sourceToken);
 }

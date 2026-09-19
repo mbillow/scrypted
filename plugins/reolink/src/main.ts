@@ -131,6 +131,13 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
             placeholder: '1935',
             type: 'number',
         },
+        onvifPort: {
+            subgroup: 'Advanced',
+            title: 'ONVIF Port Override',
+            description: 'The port serving ONVIF. Reolink devices serve ONVIF over plain HTTP on port 80, and NVRs also on 8000. This is independent of Use HTTPS.',
+            placeholder: '80',
+            type: 'number',
+        },
         motionTimeout: {
             subgroup: 'Advanced',
             title: 'Motion Timeout',
@@ -584,6 +591,22 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
         return `${this.getIPAddress()}:${this.storage.getItem('httpPort') || defaultPort}`;
     }
 
+    // ONVIF is always plain HTTP on port 80 (8000 on NVRs), even when the device
+    // API is served over HTTPS. Deriving this from getHttpAddress() aims the ONVIF
+    // client at 443, where the device answers with the web UI rather than SOAP.
+    getOnvifAddress() {
+        return `${this.getIPAddress()}:${this.storage.getItem('onvifPort') || 80}`;
+    }
+
+    // NVR channels share a single ONVIF endpoint, so its events have to be matched
+    // back to this device's channel. Standalone cameras need no filtering.
+    getOnvifSourceToken() {
+        const deviceInfo = this.storageSettings.values.deviceInfo;
+        if (!deviceInfo || !isDeviceNvr(deviceInfo))
+            return undefined;
+        return this.getRtspChannel().toString().padStart(3, '0');
+    }
+
     getClient() {
         if (!this.client)
             this.client = new ReolinkCameraClient(this.getHttpAddress(), this.getUsername(), this.getPassword(), this.getRtspChannel(), this.console, undefined, this.getScheme());
@@ -603,7 +626,7 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
     }
 
     createOnvifClient() {
-        return connectCameraAPI(this.getHttpAddress(), this.getUsername(), this.getPassword(), this.console, this.storageSettings.values.doorbell ? this.storage.getItem('onvifDoorbellEvent') : undefined);
+        return connectCameraAPI(this.getOnvifAddress(), this.getUsername(), this.getPassword(), this.console, this.storageSettings.values.doorbell ? this.storage.getItem('onvifDoorbellEvent') : undefined, this.getOnvifSourceToken());
     }
 
     async listenEvents() {
