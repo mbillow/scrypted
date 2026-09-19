@@ -349,7 +349,28 @@ export class ReolinkCameraClient {
             responseType: 'json',
         });
 
-        return response.body?.[0]?.value?.Enc;
+        const enc: Enc = response.body?.[0]?.value?.Enc;
+        if (enc)
+            return enc;
+
+        // Some devices, notably NVRs, reject the query string form of GetEnc with
+        // "check err" (rspCode -3) and answer only the documented POST body form.
+        // That failure is reported in the response rather than thrown, so without
+        // this fallback the encoder configuration is silently undefined and the
+        // caller falls back to hardcoded stream defaults.
+        const postResponse = await this.requestWithLogin({
+            url,
+            method: 'POST',
+            responseType: 'json',
+        }, this.createReadable([{
+            cmd: 'GetEnc',
+            action: 0,
+            param: {
+                channel: this.channelId,
+            },
+        }]));
+
+        return postResponse.body?.[0]?.value?.Enc;
     }
 
     async getDeviceInfo(): Promise<DevInfo> {
