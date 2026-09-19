@@ -889,7 +889,13 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
         // 1: main stream enc type is H265
 
         // anecdotally, encoders of type h265 do not have a working RTMP main stream.
-        const mainEncType = this.storageSettings.values.abilities?.value?.Ability?.abilityChn?.[rtspChannel]?.mainEncType?.ver;
+        // Some devices, notably NVRs, report mainEncType 0 on every channel even when the
+        // channel is actually encoding H.265. GetEnc reports the truth, so prefer it when
+        // it is available and only fall back to the ability flag.
+        const encMainVType = encoderConfig?.mainStream?.vType;
+        const mainEncType = (encMainVType === 'h265' || encMainVType === 'hevc')
+            ? 1
+            : this.storageSettings.values.abilities?.value?.Ability?.abilityChn?.[rtspChannel]?.mainEncType?.ver;
 
         if (isDeviceHomeHub(deviceInfo)) {
             streams.push(...[rtspMain, rtspSub]);
@@ -972,9 +978,13 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
                         if (stream.id === `h264Preview_${channel}_main`) {
                             this.console.warn('Detected h265. Change the camera configuration to use 2k mode to force h264. https://docs.scrypted.app/camera-preparation.html#h-264-video-codec');
                             stream.video.codec = 'h265';
-                            stream.id = `h265Preview_${channel}_main`;
-                            stream.name = `RTSP ${stream.id}`;
-                            stream.url = `rtsp://${this.getRtspAddress()}/${stream.id}`;
+                            // NVRs serve the H.265 main stream on the h264Preview path and
+                            // return 404 for h265Preview, so only rename it on standalone cameras.
+                            if (!isDeviceNvr(deviceInfo)) {
+                                stream.id = `h265Preview_${channel}_main`;
+                                stream.name = `RTSP ${stream.id}`;
+                                stream.url = `rtsp://${this.getRtspAddress()}/${stream.id}`;
+                            }
                             // Per Reolink:
                             // https://support.reolink.com/hc/en-us/articles/360007010473-How-to-Live-View-Reolink-Cameras-via-VLC-Media-Player/
                             // Note: the 4k cameras connected with the 4k NVR system will only show a fluent live stream instead of the clear live stream due to the H.264+(h.265) limit.
