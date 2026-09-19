@@ -1097,7 +1097,11 @@ class ReolinkCamera extends RtspSmartCamera implements Camera, DeviceProvider, R
             const deviceInfo = this.storageSettings.values.deviceInfo;
             const isHomeHub = isDeviceHomeHub(deviceInfo);
 
-            const shouldDisableHttps = this.hasHttps() ? netData.httpsEnable === 1 : false;
+            // Never turn HTTPS off on the device when the user has asked this plugin to
+            // speak HTTPS to it. Doing so would break the very connection being used here.
+            const shouldDisableHttps = this.getScheme() === 'https'
+                ? false
+                : this.hasHttps() ? netData.httpsEnable === 1 : false;
             const shouldEnableRtmp = this.hasRtmp() ? (!isHomeHub && netData.rtmpEnable === 0) : false;
             const shouldDisableRtmp = this.hasRtmp() ? (isHomeHub && netData.rtmpEnable === 1) : false;
             const shouldEnableRtsp = this.hasRtsp() ? netData.rtspEnable === 0 : false;
